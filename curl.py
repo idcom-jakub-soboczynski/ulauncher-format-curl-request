@@ -2,6 +2,7 @@ import re
 import json
 import subprocess
 from typing import Optional, Tuple
+from status_codes import get_status_description
 
 def is_curl_request(text: str) -> bool:
     """Check if the text starts with 'curl'."""
@@ -30,14 +31,25 @@ def extract_request_method(curl_command: str) -> str:
 
 def extract_payload(curl_command: str) -> str:
     """Extract the payload from the cURL command."""
-    payload_match = re.search(r"--data-raw\s+'([^']*)'", curl_command)
-    if payload_match:
-        return payload_match.group(1)
+    # Support for both --data-raw and -d flags
+    payload_patterns = [
+        r"--data-raw\s+'([^']*)'",
+        r"--data-raw\s+\"([^\"]*)\"",
+        r"-d\s+'([^']*)'",
+        r"-d\s+\"([^\"]*)\"",
+        r"--data\s+'([^']*)'",
+        r"--data\s+\"([^\"]*)\"",
+    ]
+
+    for pattern in payload_patterns:
+        payload_match = re.search(pattern, curl_command)
+        if payload_match:
+            return payload_match.group(1)
     return ""
 
 def format_json(json_str: str) -> str:
     """Format JSON string with proper indentation."""
-    if not json_str:
+    if not json_str or not json_str.strip():
         return ""
     try:
         parsed = json.loads(json_str)
@@ -45,13 +57,30 @@ def format_json(json_str: str) -> str:
     except json.JSONDecodeError:
         return json_str
 
-def execute_curl_command(curl_command: str) -> str:
-    """Execute the cURL command and return the response."""
+def execute_curl_command(curl_command: str) -> Tuple[str, int]:
+    """Execute the cURL command and return the response and status code."""
     try:
-        result = subprocess.run(curl_command, shell=True, capture_output=True, text=True)
-        return result.stdout
+        # Use %{http_code} for status and separate it with a special delimiter
+        delimiter = "===STATUS_CODE==="
+        # Add -s for silent mode and format the output to separate response from status
+        modified_command = f"{curl_command} -s -w '{delimiter}%{{http_code}}'"
+        result = subprocess.run(modified_command, shell=True, capture_output=True, text=True)
+
+        # Split response and status code using the delimiter
+        output = result.stdout
+        if delimiter in output:
+            response, status_part = output.rsplit(delimiter, 1)
+            try:
+                status_code = int(status_part.strip())
+            except ValueError:
+                status_code = 0
+        else:
+            response = output
+            status_code = 0
+
+        return response, status_code
     except subprocess.SubprocessError:
-        return ""
+        return "", 0
 
 def format_curl_request(curl_command: str) -> Tuple[bool, str]:
     """Format a cURL request and return the formatted output."""
@@ -66,7 +95,7 @@ def format_curl_request(curl_command: str) -> Tuple[bool, str]:
     formatted_payload = format_json(payload)
 
     # Execute the curl command
-    response = execute_curl_command(curl_command)
+    response, status_code = execute_curl_command(curl_command)
     formatted_response = format_json(response)
 
     # Build the result string conditionally
@@ -77,6 +106,10 @@ def format_curl_request(curl_command: str) -> Tuple[bool, str]:
 
     if request_method:
         result_parts.append(f"Request Method: {request_method}")
+
+    # Add status with full description
+    if status_code > 0:
+        result_parts.append(f"Status: {get_status_description(status_code)}")
 
     if formatted_payload:
         result_parts.append(f"\nPayload: {formatted_payload}")
