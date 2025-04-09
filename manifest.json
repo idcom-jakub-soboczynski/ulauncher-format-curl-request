@@ -1,0 +1,19 @@
+{
+  "required_api_version": "v2.0.0",
+  "name": "Format cURL Request",
+  "description": "Format cURL requests into a more readable format",
+  "developer_name": "teziovsky",
+  "icon": "images/icon.png",
+  "options": {
+    "query_debounce": 0.1
+  },
+  "preferences": [
+    {
+      "id": "curl_kw",
+      "type": "keyword",
+      "name": "Format cURL",
+      "description": "Format cURL request",
+      "default_value": "curl"
+    }
+  ]
+}
