@@ -69,13 +69,23 @@ def format_curl_request(curl_command: str) -> Tuple[bool, str]:
     response = execute_curl_command(curl_command)
     formatted_response = format_json(response)
 
-    # Format the result
-    result = f"""Request URL: {request_url}
-Request Method: {request_method}
+    # Build the result string conditionally
+    result_parts = []
 
-Payload: {formatted_payload}
+    if request_url:
+        result_parts.append(f"Request URL: {request_url}")
 
-Response: {formatted_response}"""
+    if request_method:
+        result_parts.append(f"Request Method: {request_method}")
+
+    if formatted_payload:
+        result_parts.append(f"\nPayload: {formatted_payload}")
+
+    if formatted_response:
+        result_parts.append(f"\nResponse: {formatted_response}")
+
+    # Join all parts with newlines
+    result = "\n".join(result_parts)
 
     return True, result
 
